@@ -3,21 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use Auth;
-use Carbon\Carbon;
 use Exception;
+use Carbon\Carbon;
 use App\Models\Role;
 use App\Models\User;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateUserRequest;
+use App\Http\Requests\StoreUserRequest;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Redirector;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Facades\Validator;
 
 class UsersManagementController extends Controller {
     /**
@@ -57,32 +56,13 @@ class UsersManagementController extends Controller {
     /**
      * Store a newly created user in storage.
      *
-     * @param Request $request
+     * @param StoreUserRequest $request
      * @return RedirectResponse
      */
-    public function store(Request $request): RedirectResponse {
-        $rules = [
-            'name' => ['required', 'string', 'max:255', 'unique:users'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'password_confirmation' => ['required', 'string', 'same:password'],
-            'role' => ['required', 'string'],
-        ];
-        $validator = Validator::make($request->all(), $rules);
-
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
-
-        $user = User::create([
-            'name' => strip_tags($request->input('name')),
-            'email' => $request->input('email'),
-            'password' => Hash::make($request->input('password')),
-        ]);
-
-//        TODO: add choice of permissions
-        $user->assignRole($request->input('role'));
-        $user->save();
+    public function store(StoreUserRequest $request): RedirectResponse {
+        // TODO: add choice of permissions
+        $user = User::create($request->safe()->except('role'));
+        $user->assignRole($request->safe()->only('role'));
 
         return redirect($request->input('redirect'))
             ->with('status', 'success')
@@ -118,50 +98,13 @@ class UsersManagementController extends Controller {
     /**
      * Update the specified user in storage.
      *
-     * @param Request $request
+     * @param UpdateUserRequest $request
      * @param User $user
-     * @return RedirectResponse|Response
+     * @return RedirectResponse
      */
-    public function update(Request $request, User $user) {
-        $nameCheck = !empty($request->input('name')) && ($request->input('name') != $user->name);
-        $emailCheck = !empty($request->input('email')) && ($request->input('email') != $user->email);
-        $passwordCheck = !empty($request->input('password'));
-
-        if ($nameCheck) {
-            $rules['name'] = ['required', 'string', 'max:255', 'unique:users'];
-        }
-
-        if ($emailCheck) {
-            $rules['email'] = ['required', 'string', 'email', 'max:255', 'unique:users'];
-        }
-
-        if ($passwordCheck) {
-            $rules['password'] = ['required', 'string', 'min:6', 'confirmed'];
-            $rules['password_confirmation'] = ['required', 'string', 'same:password'];
-        }
-
-        if (isset($rules)) {
-            $validator = Validator::make($request->all(), $rules);
-
-            if ($validator->fails()) {
-                return back()->withErrors($validator)->withInput();
-            }
-        }
-
-        if ($nameCheck) {
-            $user->name = strip_tags($request->input('name'));
-        }
-
-        if ($emailCheck) {
-            $user->email = $request->input('email');
-        }
-
-        if ($passwordCheck) {
-            $user->password = Hash::make($request->input('password'));
-        }
-
-        $user->syncRoles($request->input('role'));
-        $user->save();
+    public function update(UpdateUserRequest $request, User $user): RedirectResponse {
+        $user->update($request->safe()->except('role'));
+        $user->syncRoles($request->safe()->only('role'));
 
         return back()
             ->with('status', 'success')
